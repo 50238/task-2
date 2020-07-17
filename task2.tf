@@ -1,34 +1,34 @@
 provider "aws" {
   region  = "ap-south-1"
 }
-resource "aws_vpc" "main" {
+resource "aws_vpc" "vpc-akash" {
   cidr_block       = "192.168.0.0/16"
   instance_tenancy = "default"
 
   tags = {
-    Name = "AKASH-VPC"
+    Name = "akash-vpc"
   }
 }
-resource "aws_subnet" "main1" {
-  vpc_id     = "${aws_vpc.main.id}"
+resource "aws_subnet" "aws-akash" {
+  vpc_id     = "${aws_vpc.vpc-akash.id}"
   cidr_block = "192.168.0.0/24"
   map_public_ip_on_launch = true
   availability_zone = "ap-south-1a"
 
 
   tags = {
-    Name = "akash-subnet"
+    Name = "subnet"
   }
 }
 resource "aws_internet_gateway" "gw" {
-  vpc_id = "${aws_vpc.main.id}"
+  vpc_id = "${aws_vpc.vpc-akash.id}"
 
   tags = {
-    Name = "Akash-gateway"
+    Name = "gateway"
   }
 }
-resource "aws_route_table" "r" {
-  vpc_id = "${aws_vpc.main.id}"
+resource "aws_route_table" "route" {
+  vpc_id = "${aws_vpc.vpc-akash.id}"
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -39,31 +39,31 @@ resource "aws_route_table" "r" {
     Name = "route-table"
   }
 }
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.main1.id
-  route_table_id = aws_route_table.r.id
+resource "aws_route_table_association" "first" {
+  subnet_id      = aws_subnet.aws-akash.id
+  route_table_id = aws_route_table.route.id
 }
-  resource "aws_s3_bucket" "b" {
-  bucket = "Akash-BUCKET"
+  resource "aws_s3_bucket" "second" {
+  bucket = "akash-bucket"
   acl    = "public-read"
  tags = {
-  Name = "mybucket"
+  Name = "akashbucket"
 }
 
 }
 resource "aws_s3_bucket_object" "object" {
-  bucket = aws_s3_bucket.b.id
-  key    = "vimal sir.jpg"
+  bucket = aws_s3_bucket.second.id
+  key    = "red.jpg"
 }
 
 locals{
-  s3_origin_id = "aws_s3_bucket.b.id"
-  depends_on = [aws_s3_bucket.b]
+  s3_origin_id = "aws_s3_bucket.second.id"
+  depends_on = [aws_s3_bucket.second]
 }
 resource "aws_security_group" "sg1" {
   name        = "securitygr1"
   description = "Allow NFS"
-  vpc_id      = "${aws_vpc.main.id}"
+  vpc_id      = "${aws_vpc.vpc-akash.id}"
 
   ingress {
     description = "ssh"
@@ -94,7 +94,7 @@ ingress {
   }
 
   tags = {
-    Name = "NFS-groups"
+    Name = "nfs-groups"
   }
 }
 resource "aws_efs_file_system" "myefs" {
@@ -102,25 +102,25 @@ resource "aws_efs_file_system" "myefs" {
   performance_mode = "generalPurpose"
 
   tags = {
-    Name = "Akash-EFS"
+    Name = "akash-efs"
   }
 }
 
 resource "aws_efs_mount_target" "myefs-mount" {
   file_system_id = aws_efs_file_system.myefs.id
-  subnet_id = aws_subnet.main1.id
+  subnet_id = aws_subnet.aws-akash.id
   security_groups = [ aws_security_group.sg1.id ]
 }
 resource "aws_instance" "webserver" {
   depends_on = [ aws_efs_mount_target.myefs-mount ]
-  ami = "ami-0447a12f28fddb066"
+  ami = "ami-0732b62d310b80e97"
   instance_type = "t2.micro"
   key_name = "akash"
-  subnet_id = aws_subnet.main1.id
+  subnet_id = aws_subnet.aws-akash.id
   vpc_security_group_ids = [ aws_security_group.sg1.id ]
   
   tags = {
-    Name = "Webserver-os"
+    Name = "webserver-os"
   }
 }
 resource "null_resource" "nullremote1" {
@@ -143,7 +143,7 @@ resource "null_resource" "nullremote1" {
       "sudo mount -t efs ${aws_efs_file_system.myefs.id}:/ /var/www/html",
       "sudo echo '${aws_efs_file_system.myefs.id}:/ /var/www/html efs defaults,_netdev 0 0' >> /etc/fstab",
       "sudo rm -rf /var/www/html/*",
-      "sudo git clone https://github.com/50238/task-2.git /var/www/html/"
+      "sudo git clone https://github.com/Prafullwaidande/hybrid-multi-cloud-computing-task-2.git /var/www/html/"
     ]
   }
 }
@@ -156,7 +156,7 @@ output "origin_access_identity" {
 data "aws_iam_policy_document" "policy" {
   statement {
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.b.arn}/*"]
+    resources = ["${aws_s3_bucket.second.arn}/*"]
     principals {
       type        = "AWS"
       identifiers = ["${aws_cloudfront_origin_access_identity.identity.iam_arn}"]
@@ -164,24 +164,24 @@ data "aws_iam_policy_document" "policy" {
   }
   statement {
     actions   = ["s3:ListBucket"]
-    resources = ["${aws_s3_bucket.b.arn}"]
+    resources = ["${aws_s3_bucket.second.arn}"]
     principals {
       type        = "AWS"
       identifiers = ["${aws_cloudfront_origin_access_identity.identity.iam_arn}"]
     }
   }
 }
-resource "aws_s3_bucket_policy" "policy1" {
-  bucket = aws_s3_bucket.b.id
+resource "aws_s3_bucket_policy" "first-policy" {
+  bucket = aws_s3_bucket.second.id
   policy = data.aws_iam_policy_document.policy.json
 }
 
-resource "aws_cloudfront_distribution" "cloudfront1" {
+resource "aws_cloudfront_distribution" "cloudfront" {
     enabled             = true
     is_ipv6_enabled     = true
     wait_for_deployment = false
     origin {
-        domain_name = "${aws_s3_bucket.b.bucket_regional_domain_name}"
+        domain_name = "${aws_s3_bucket.second.bucket_regional_domain_name}"
         origin_id   = local.s3_origin_id
     s3_origin_config {
        origin_access_identity = "${aws_cloudfront_origin_access_identity.identity.cloudfront_access_identity_path}" 
