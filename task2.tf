@@ -53,7 +53,7 @@ resource "aws_route_table_association" "a" {
 }
 resource "aws_s3_bucket_object" "object" {
   bucket = aws_s3_bucket.b.id
-  key    = "image.jpg"
+  key    = "vimal sir.jpg"
 }
 
 locals{
